@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>🎙️ 会议助手 - 在线版</title>
+    <style>
+        body {
+            font-family: '微软雅黑', sans-serif;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: white;
+        }
+        .container {
+            background: white;
+            color: #333;
+            padding: 30px;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        h1 {
+            text-align: center;
+            color: #667eea;
+            margin-bottom: 30px;
+        }
+        .btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 50px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px;
+            transition: all 0.3s;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        .btn-red {
+            background: #e53e3e;
+        }
+        .btn-green {
+            background: #38a169;
+        }
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        textarea {
+            width: 100%;
+            height: 150px;
+            padding: 15px;
+            border: 2px solid #e2e8f0;
+            border-radius: 10px;
+            font-size: 16px;
+            margin: 15px 0;
+        }
+        .section {
+            margin: 25px 0;
+            padding: 20px;
+            background: #f7fafc;
+            border-radius: 15px;
+        }
+        h3 {
+            color: #667eea;
+            margin-top: 0;
+        }
+        #summary, #tasks {
+            line-height: 1.8;
+            font-size: 15px;
+            min-height: 60px;
+        }
+        .status {
+            text-align: center;
+            margin: 10px 0;
+            font-size: 14px;
+            min-height: 20px;
+            color: #e53e3e;
+        }
+        .live-text {
+            font-size: 18px;
+            line-height: 1.6;
+            padding: 10px;
+            background: #e2e8f0;
+            border-radius: 8px;
+            min-height: 60px;
+        }
+        .loading {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border: 2px solid #667eea;
+            border-radius: 50%;
+            border-top-color: transparent;
+            animation: spin 1s linear infinite;
+            margin-right: 8px;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .guide {
+            background: #e2e8f0;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎤 会议助手 - 在线版</h1>
+
+        <div class="guide">
+            <h3>📌 使用说明</h3>
+            <ol>
+                <li>点击 <strong>🎤 开始说话</strong>，说出会议内容</li>
+                <li>说完后点击 <strong>⏹️ 停止识别</strong></li>
+                <li>点击 <strong>生成会议纪要</strong>，AI 自动整理</li>
+            </ol>
+            <p>💡 无需安装，AI 由云端驱动</p>
+        </div>
+
+        <div class="section">
+            <h3>🎙️ 实时语音识别</h3>
+            <button onclick="startRealTimeRecognition()" class="btn">🎤 开始说话</button>
+            <button onclick="stopRecognition()" class="btn btn-red">⏹️ 停止识别</button>
+            <div class="status" id="status"></div>
+        </div>
+
+        <div class="section">
+            <h3>📝 实时转写结果</h3>
+            <div id="liveTranscript" class="live-text">识别结果将实时显示在这里...</div>
+        </div>
+
+        <div class="section">
+            <h3>📝 最终会议内容</h3>
+            <textarea id="transcript" placeholder="完整的会议记录会合并到这里..."></textarea>
+        </div>
+
+        <div class="section">
+            <h3>✨ 智能处理</h3>
+            <button onclick="generateSummary()" class="btn" id="summaryBtn">生成会议纪要</button>
+            <button onclick="extractTasks()" class="btn">提取任务</button>
+        </div>
+
+        <div class="section">
+            <h3>📊 会议纪要</h3>
+            <div id="summary">点击“生成会议纪要”按钮，AI 将分析内容并生成结构化纪要...</div>
+        </div>
+
+        <div class="section">
+            <h3>✅ 任务清单</h3>
+            <div id="tasks">点击“提取任务”按钮，AI 可提取待办事项...</div>
+        </div>
+    </div>
+
+    <script>
+        // 检查浏览器是否支持 Web Speech API
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+            alert("⚠️ 您的浏览器不支持语音识别，请使用 Chrome 或 Edge");
+        }
+
+        const recognition = new SpeechRecognition();
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.lang = 'zh-CN';
+
+        let finalTranscript = '';
+
+        function startRealTimeRecognition() {
+            const status = document.getElementById('status');
+            try {
+                recognition.start();
+                status.textContent = "🟢 正在识别... 请开始说话";
+                document.getElementById('liveTranscript').textContent = "";
+                document.getElementById('transcript').value = "";
+                finalTranscript = '';
+            } catch (error) {
+                status.textContent = "❌ 启动失败: " + error.message;
+            }
+        }
+
+        function stopRecognition() {
+            recognition.stop();
+            document.getElementById('status').textContent = "✅ 识别已停止";
+        }
+
+        recognition.onresult = (event) => {
+            let interimTranscript = '';
+            finalTranscript = '';
+
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+                const transcript = event.results[i][0].transcript;
+                if (event.results[i].isFinal) {
+                    finalTranscript += transcript + ' ';
+                } else {
+                    interimTranscript = transcript;
+                }
+            }
+
+            document.getElementById('liveTranscript').textContent = interimTranscript;
+            const finalText = (document.getElementById('transcript').value + finalTranscript).trim();
+            document.getElementById('transcript').value = finalText || '';
+        };
+
+        recognition.onerror = (event) => {
+            document.getElementById('status').textContent = "❌ 识别错误: " + event.error;
+        };
+
+        recognition.onend = () => {
+            document.getElementById('status').textContent = "⏹️ 识别已结束（如需继续，请点击开始）";
+        };
+
+        // ✅ 修改：调用本地 /api/generate，由 Vercel 代理转发到阿里云
+        async function generateSummary() {
+            const transcript = document.getElementById('transcript').value.trim();
+            if (!transcript) {
+                alert("请先录音获取内容！");
+                return;
+            }
+
+            const summaryDiv = document.getElementById('summary');
+            const btn = document.getElementById('summaryBtn');
+
+            btn.disabled = true;
+            btn.textContent = '';
+            summaryDiv.innerHTML = '<span class="loading"></span> AI 正在生成会议纪要...';
+
+            try {
+                const MAX_LENGTH = 1000;
+                const content = transcript.length > MAX_LENGTH 
+                    ? transcript.substring(0, MAX_LENGTH) + "..." 
+                    : transcript;
+
+                const res = await fetch('/api/generate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        content: content,
+                        type: 'summary'
+                    })
+                });
+
+                const data = await res.json();
+                if (data.text) {
+                    summaryDiv.innerHTML = data.text;
+                } else {
+                    summaryDiv.innerHTML = `❌ AI 错误：${data.error || JSON.stringify(data)}`;
+                }
+            } catch (error) {
+                summaryDiv.innerHTML = `❌ 请求失败：${error.message}`;
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '生成会议纪要';
+            }
+        }
+
+        async function extractTasks() {
+            const transcript = document.getElementById('transcript').value.trim();
+            if (!transcript) {
+                alert("请先录音获取内容！");
+                return;
+            }
+
+            const tasksDiv = document.getElementById('tasks');
+            tasksDiv.innerHTML = '<span class="loading"></span> AI 正在提取任务...';
+
+            try {
+                const content = transcript.substring(0, 800) + "...";
+
+                const res = await fetch('/api/generate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        content: content,
+                        type: 'task'
+                    })
+                });
+
+                const data = await res.json();
+                if (data.text) {
+                    tasksDiv.innerHTML = `<pre>${data.text}</pre>`;
+                } else {
+                    tasksDiv.innerHTML = `❌ 提取失败：${data.error || JSON.stringify(data)}`;
+                }
+            } catch (error) {
+                tasksDiv.innerHTML = `❌ 提取失败：${error.message}`;
+            }
+        }
+    </script>
+</body>
+</html>
